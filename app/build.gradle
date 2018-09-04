@@ -1,0 +1,201 @@
+apply plugin: 'com.android.application'
+//apply from: 'and_res_guard.gradle'
+apply from: '../setting/and_res_guard.gradle'
+
+def config = rootProject.ext.android//配置
+def librarys = rootProject.ext.dependencies//依赖
+
+static def releaseTime() {
+    return new Date().format("yyyy-MM-dd", TimeZone.getTimeZone("GMT+8"))
+}
+
+android {
+    signingConfigs {
+        /**签名存放到gradle.properties中  */
+        signingInfo {
+            /*
+             keyAlias RELEASE_KEY_ALIAS
+             keyPassword RELEASE_KEY_PASSWORD
+             storeFile file(RELEASE_STORE_FILE)
+             storePassword RELEASE_STORE_PASSWORD
+             */
+
+            /**签名存放到common.gradle中  */
+            storeFile file(rootProject.ext.signConfigs.storeFile)
+            storePassword rootProject.ext.signConfigs.storePassword
+            keyAlias rootProject.ext.signConfigs.keyAlias
+            keyPassword rootProject.ext.signConfigs.keyPassword
+        }
+
+    }
+    compileSdkVersion config.compileSdkVersion
+    buildToolsVersion config.buildToolsVersion
+    defaultConfig {
+        applicationId config.applicationId
+        minSdkVersion config.minSdkVersion
+        targetSdkVersion config.targetSdkVersion
+        versionCode config.versionCode
+        versionName config.versionName
+        flavorDimensions config.flavorDimensions
+        buildConfigField('String', 'logTag', '"TAG"')    //打印日志输出的TAG标记名
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            minifyEnabled true
+            debuggable false
+            zipAlignEnabled true    // 开启ZipAlign优化
+            shrinkResources true    //移除无用的资源文件
+            signingConfig signingConfigs.signingInfo
+            buildConfigField('String', 'baseUrl', '"http://www.android.com/test"') //测试网络
+            proguardFiles fileTree(dir: "../setting/proguard", include: ["*.pro"]).asList().toArray()
+
+            /** 输出apk文件*/
+            /*  android.applicationVariants.all { variant ->
+                  variant.outputs.all {
+                      outputFileName = "${releaseTime()}-${variant.flavorName}-${buildType.name}-${defaultConfig.versionName}.apk"
+                  }
+              }*/
+            android.applicationVariants.all { variant ->
+                variant.outputs.all {
+                    output ->
+                        def outputFile = output.outputFile
+                        if (!outputFile.name.contains("debug")) {
+                            //outputFileName = new File(project.rootDir.absolutePath, "${releaseTime()}-${variant.flavorName}-${buildType.name}-${defaultConfig.versionName}.apk")
+                            variant.getPackageApplication().outputDirectory = new File(project.rootDir.absolutePath + "/app/build/outputs/apk/release" + System.getProperty("file.separator") + releaseTime())
+                            outputFileName = "${releaseTime()}-${variant.flavorName}-${buildType.name}-${defaultConfig.versionName}.apk"
+
+                        }
+
+                }
+            }
+            /**release下保存mappings文件信息 */
+            /* applicationVariants.all { variant ->
+                 if (variant.getBuildType().isMinifyEnabled()) {
+                     variant.assemble.doLast {
+                         copy {
+                             from variant.mappingFile
+                             into "${project.rootDir.absolutePath}/app/build/mappings"
+                         }
+                     }
+                 }
+             }*/
+
+            applicationVariants.all { variant ->
+                variant.outputs.each { output ->
+                    if (variant.getBuildType().isMinifyEnabled()) {
+                        variant.assemble.doLast {
+                            copy {
+                                from variant.mappingFile
+                                into "${project.rootDir.absolutePath}/app/build/mappings"
+                                rename { String fileName ->
+                                    "mapping-${variant.name}.txt"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        debug {
+            minifyEnabled true
+            debuggable true
+            zipAlignEnabled true    // 开启ZipAlign优化
+            shrinkResources true    //移除无用的资源文件
+            proguardFiles fileTree(dir: "../setting/proguard", include: ["*.pro"]).asList().toArray()
+            //proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            buildConfigField('String', 'baseUrl', '" http://www.android.com/product "') //生产网络
+            signingConfig signingConfigs.signingInfo
+
+        }
+
+    }
+
+    productFlavors { //多渠道分发 gradlewassembleFlavorRelease
+        xiaomi { //小米
+            applicationIdSuffix '.debug' //在原有applicationId的基础上加上此后缀
+        }
+        tencent { //腾讯
+            applicationId "com.xx.xx.tencent" //在此渠道使用新的包名，将会替换manifeset中package的值，其他不变
+        }
+        qihu360 { //360
+        }
+    }
+    productFlavors.all {
+            //CHANNEL_VALUE同manifest中meta-data标签（CHANNEL）中的value值保存一致
+        flavor -> flavor.manifestPlaceholders = [CHANNEL_VALUE: name]
+    }
+}
+
+dependencies {
+
+    //config.gradle
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+
+    implementation librarys.design
+    implementation librarys.supportV4
+    implementation librarys.cardview
+    implementation librarys.supportV7
+    implementation librarys.recyclerview
+    implementation librarys.constraintlayout
+
+
+    implementation librarys.multidex
+    implementation librarys.glide
+    annotationProcessor librarys.glideAnnotation
+    implementation librarys.okhttp3
+    implementation librarys.eventbus
+    implementation librarys.stetho
+    implementation librarys.gson
+    implementation librarys.rxjava
+    implementation librarys.rxandroid
+    implementation librarys.retrofit
+    implementation librarys.converterGson
+    implementation librarys.adapterRxjava
+    implementation librarys.okhttp3Log
+    implementation librarys.easyPermissions
+    implementation librarys.compressImage
+    implementation librarys.bannerView
+/*
+
+
+*/
+
+    //common-gradle
+    /*  compile fileTree(include: ['*.jar'], dir: 'libs')
+      compile rootProject.ext.dependence.libSupportV7
+      compile rootProject.ext.dependence.libSupportMultidex
+      //依赖library工程
+      compile rootProject.ext.dependence.libCircleImageView
+      compile rootProject.ext.dependence.libSystembarTint
+      //添加友盟统计
+      compile rootProject.ext.dependence.libUmengAnalytics
+      compile rootProject.ext.dependence.libUniversalImageLoader
+      compile rootProject.ext.dependence.libOkhttp
+      //okttp依赖
+      //compile 'com.github.chrisbanes:PhotoView:1.3.0'
+      compile(rootProject.ext.dependence.libAutoScrollViewPager) {
+          exclude module: 'support-v4' //排除依赖
+          transitive false //禁止传递依赖
+      }
+      compile rootProject.ext.dependence.libSlidableActivity
+      //滑动关闭Activity库
+      compile rootProject.ext.dependence.libAndfix
+      //阿里热修复andfix
+      compile rootProject.ext.dependence.libLogger
+      //日志库logger
+      //Tinker相关依赖
+      compile(rootProject.ext.dependence.libTinker) {
+          changing = true //每次都从服务端拉取
+      }
+      provided(rootProject.ext.dependence.libTinkerAndroid) { changing = true }*/
+}
+/*
+configurations.all{
+
+    all*.exclude group: 'com.android.support', module: 'support-annotations'
+
+}*/
